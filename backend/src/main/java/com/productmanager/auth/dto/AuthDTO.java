@@ -5,5 +5,5 @@ public class AuthDTO {
     public record LoginRequest(@Email @NotBlank String email, @NotBlank String password) {}
     public record RefreshTokenRequest(@NotBlank String refreshToken) {}
     public record TokenResponse(String accessToken, String refreshToken, String tokenType, long expiresIn, UserInfo user) {}
-    public record UserInfo(Long id, String name, String email, String storeName) {}
+    public record UserInfo(Long id, String name, String email, String storeName, String role) {}
 }
