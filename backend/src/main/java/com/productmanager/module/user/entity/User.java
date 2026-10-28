@@ -15,6 +15,7 @@ public class User implements UserDetails {
     @Column(nullable = false, unique = true) private String email;
     @Column(nullable = false) private String password;
     @Enumerated(EnumType.STRING) @Column(nullable = false) @Builder.Default private Role role = Role.USER;
+    @Column(nullable = false) @Builder.Default private boolean active = true;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "store_id", nullable = false) private Store store;
     @Column(name = "created_at", nullable = false, updatable = false) private LocalDateTime createdAt;
     @PrePersist protected void onCreate() { this.createdAt = LocalDateTime.now(); }
@@ -23,6 +24,6 @@ public class User implements UserDetails {
     @Override public boolean isAccountNonExpired() { return true; }
     @Override public boolean isAccountNonLocked() { return true; }
     @Override public boolean isCredentialsNonExpired() { return true; }
-    @Override public boolean isEnabled() { return true; }
+    @Override public boolean isEnabled() { return active; }
     public enum Role { USER, ADMIN }
 }

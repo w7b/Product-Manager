@@ -4,6 +4,7 @@ import com.productmanager.exception.ResourceNotFoundException;
 import com.productmanager.module.category.dto.CategoryDTO;
 import com.productmanager.module.category.entity.Category;
 import com.productmanager.module.category.repository.CategoryRepository;
+import com.productmanager.module.product.repository.ProductRepository;
 import com.productmanager.module.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ import java.util.List;
 @Service @RequiredArgsConstructor
 public class CategoryService {
     private final CategoryRepository repo;
+    private final ProductRepository productRepo;
     @Transactional(readOnly=true)
     public List<CategoryDTO.Response> findAll(User u) {
         return repo.findByStoreId(u.getStore().getId()).stream().map(this::toRes).toList();
@@ -33,7 +35,13 @@ public class CategoryService {
         return toRes(repo.save(c));
     }
     @Transactional
-    public void delete(Long id, User u) { repo.delete(findOwned(id, u)); }
+    public void delete(Long id, User u) {
+        Category c = findOwned(id, u);
+        long linked = productRepo.countByCategoryIdAndStoreId(id, u.getStore().getId());
+        if (linked > 0)
+            throw new BusinessException("A categoria '" + c.getName() + "' possui " + linked + " produto(s) vinculado(s). Mova ou exclua esses produtos antes.");
+        repo.delete(c);
+    }
     private Category findOwned(Long id, User u) {
         return repo.findByIdAndStoreId(id, u.getStore().getId())
             .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada: "+id));

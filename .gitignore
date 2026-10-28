@@ -1,0 +1,13 @@
+# Build
+backend/target/
+frontend/node_modules/
+frontend/dist/
+
+# IDE / SO
+.idea/workspace.xml
+*.iml
+.DS_Store
+Thumbs.db
+
+# Ambiente local
+.env

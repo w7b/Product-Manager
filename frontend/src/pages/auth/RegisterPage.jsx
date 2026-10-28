@@ -90,6 +90,9 @@ export default function RegisterPage() {
               })}
             />
             {errors.storeName && <span style={styles.error}>{errors.storeName.message}</span>}
+            <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+              Uma loja nova será criada e você será o administrador. Funcionários são cadastrados pelo administrador em Usuários.
+            </span>
           </div>
 
           <button type="submit" disabled={loading} style={{ ...styles.btn, opacity: loading ? 0.6 : 1 }}>

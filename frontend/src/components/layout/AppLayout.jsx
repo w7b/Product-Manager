@@ -4,12 +4,15 @@ import toast from 'react-hot-toast'
 
 const navItems = [
   { to: '/dashboard',  label: 'Visão Geral',  icon: '◈' },
+  { to: '/orders',     label: 'Pedidos',       icon: '▤' },
   { to: '/products',   label: 'Produtos',      icon: '⬡' },
+  { to: '/stock',      label: 'Estoque',       icon: '▥' },
   { to: '/categories', label: 'Categorias',    icon: '◇' },
+  { to: '/users',      label: 'Usuários',      icon: '◎', adminOnly: true },
 ]
 
 export default function AppLayout() {
-  const { user, logout } = useAuth()
+  const { user, isAdmin, logout } = useAuth()
   const navigate = useNavigate()
 
   function handleLogout() {
@@ -32,7 +35,7 @@ export default function AppLayout() {
         </div>
 
         <nav style={styles.nav}>
-          {navItems.map(item => (
+          {navItems.filter(item => !item.adminOnly || isAdmin).map(item => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -49,7 +52,7 @@ export default function AppLayout() {
             <div style={styles.avatar}>{user?.name?.[0]?.toUpperCase()}</div>
             <div style={styles.userDetails}>
               <div style={styles.userName}>{user?.name}</div>
-              <div style={styles.userEmail}>{user?.email}</div>
+              <div style={styles.userEmail}>{isAdmin ? 'Administrador' : 'Usuário'} · {user?.email}</div>
             </div>
           </div>
           <button onClick={handleLogout} style={styles.logoutBtn} title="Sair">⏏</button>

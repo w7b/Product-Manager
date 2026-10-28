@@ -35,6 +35,7 @@ services:
       JWT_SECRET: minha-chave-secreta-super-segura-256-bits-producao
       JWT_ACCESS_EXPIRATION: 900000
       JWT_REFRESH_EXPIRATION: 604800000
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
     ports:
       - "8080:8080"
     depends_on:
