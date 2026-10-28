@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useCallback } from 'react'
-import { authApi } from '../api'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { authApi, usersApi } from '../api'
 
 const AuthContext = createContext(null)
 
@@ -32,9 +32,19 @@ export function AuthProvider({ children }) {
   }, [])
 
   const isAuthenticated = Boolean(user && localStorage.getItem('access_token'))
+  const isAdmin = user?.role === 'ADMIN'
+
+  // Atualiza os dados do usuário (ex.: papel alterado pelo ADMIN) ao abrir o sistema.
+  useEffect(() => {
+    if (!isAuthenticated) return
+    usersApi.me().then(({ data }) => {
+      localStorage.setItem('user', JSON.stringify(data))
+      setUser(data)
+    }).catch(() => {})
+  }, [isAuthenticated])
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, isAdmin, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   )

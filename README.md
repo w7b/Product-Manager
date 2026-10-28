@@ -5,183 +5,155 @@
 [![Docker](https://img.shields.io/badge/Docker-Container-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 
-Uma solução corporativa completa para governança de estoques, gerenciamento multi-tenant de lojas e catalogação inteligente de produtos. Desenvolvido com uma arquitetura desacoplada utilizando **Spring Boot 3.2** no ecossistema de backend e **React + Vite** no ecossistema de frontend.
+Sistema web multi-tenant para a operação de uma loja (caso de uso: hamburgueria): catálogo de produtos e categorias, **controle de estoque**, **pedidos/vendas**, **gestão da equipe com papéis** e **painel com relatórios**. Backend em **Spring Boot 3.2 (Java 17)** e frontend em **React 18 + Vite**.
 
 ---
 
-## 🗺️ Visão Geral da Arquitetura
+## 🗺️ Visão geral da arquitetura
 
-O sistema adota o modelo de isolamento lógico por **Lojas (Stores)**, garantindo que usuários, categorias e produtos estejam estritamente vinculados a uma organização específica.
+Cada **loja (store)** é um tenant isolado: usuários, categorias, produtos, movimentações de estoque e pedidos pertencem a uma loja, e toda consulta é filtrada pela loja do usuário autenticado (extraída do JWT, nunca enviada pelo cliente).
 
-```fullstack-pm/
-├── docker-compose.yml          # Orquestração da infraestrutura local (App + DB)
-├── backend/                    # Core API: Spring Boot 3.2 + Java 17 + Maven
-│   ├── Dockerfile
-│   └── src/main/java/com/productmanager/
-│       ├── auth/               # Mecanismo de segurança JWT & UserDetails
-│       ├── config/             # Configurações de filtros, CORS e SecurityFilterChain
-│       ├── exception/          # Interceptor global de exceções (Clean Responses)
-│       └── module/             # Domínios de negócio isolados (Camadas segredadas)
-│           ├── store/          # Contexto delimitador de Lojas
-│           ├── user/           # Gestão de contas e perfis (Roles)
-│           ├── category/       # Agrupamentos lógicos de produtos
-│           └── product/        # Catálogo com paginação e ordenação nativa
-└── frontend/                   # UI/UX Layer: React 18 + Vite + Tailwind/CSS
-└── src/
-├── api/                # Cliente Axios customizado + Interceptors para Auto-Refresh
-├── components/         # Design System (Atomic Components & Layouts)
-├── context/            # Gerenciamento de estado global (AuthContext)
-├── hooks/              # Hooks customizados para abstração de lógica assíncrona
-├── pages/              # Views baseadas em rotas declarativas
-└── routes/             # Guardas de rotas dinâmicas (Públicas vs Privadas)
+```
+fullstack-pm/
+├── docker-compose.yml              # Banco + API + Web
+├── backend/                        # Spring Boot 3.2 + Java 17 + Maven
+│   └── src/main/
+│       ├── java/com/productmanager/
+│       │   ├── auth/               # Registro, login, refresh (JWT)
+│       │   ├── config/             # Spring Security, filtro JWT, CORS, Swagger
+│       │   ├── exception/          # Tratamento global de erros
+│       │   └── module/
+│       │       ├── store/          # Lojas (tenant)
+│       │       ├── user/           # Equipe da loja e papéis (USER / ADMIN)
+│       │       ├── category/       # Categorias
+│       │       ├── product/        # Catálogo com busca, filtro e paginação
+│       │       ├── stock/          # Movimentações de estoque e alertas
+│       │       ├── order/          # Pedidos e itens
+│       │       └── report/         # Indicadores e exportação CSV
+│       └── resources/db/migration/ # Migrações Flyway (V1, V2, V3)
+└── frontend/                       # React 18 + Vite
+    └── src/ (api, components, context, hooks, pages, routes)
 ```
 
----
+### Banco de dados (7 tabelas)
 
-## 🔐 Engine de Autenticação & Segurança
+| Tabela | Conteúdo |
+| --- | --- |
+| `stores` | Lojas (nome único) |
+| `users` | Usuários da loja, papel `USER`/`ADMIN`, conta ativa ou não |
+| `categories` | Categorias (nome único por loja) |
+| `products` | Produtos: preço, SKU, estoque atual, estoque mínimo, ativo |
+| `stock_movements` | Histórico de entradas, saídas e ajustes, com saldo após cada movimento |
+| `orders` | Pedidos: status `ABERTO`/`FINALIZADO`/`CANCELADO`, pagamento, total |
+| `order_items` | Itens do pedido, com o preço copiado no momento da venda |
 
-O fluxo de segurança implementa o padrão clássico de tokens de curta duração aliado a tokens de renovação, mitigando riscos de hijacking de sessão:
-
-1. **Handshake Inicial:** `/api/auth/login` devolve um `accessToken` (15 min) e um `refreshToken` (7 dias).
-2. **Sessão Persistente:** Os tokens de sessão são isolados e gerenciados no estado da aplicação e `localStorage`.
-3. **Interceptor de Requisições:** O cliente Axios injeta automaticamente o cabeçalho `Authorization: Bearer <token>` em rotas protegidas.
-4. **Auto-Refresh Loop:** Se a API retornar um status `401 Unauthorized`, o Interceptor congela a pilha de requisições, consome o endpoint de refresh e reexecuta as chamadas originais de forma transparente para o usuário.
-
-| Rota Visual | Protegida? | Escopo / Operação |
-| :--- | :---: | :--- |
-| `/login` | ✗ | Autenticação e geração de chaves criptográficas. |
-| `/register` | ✗ | Criação de conta e provisionamento de Tenant. |
-| `/dashboard` | **✔** | Agregados analíticos e gráficos de inventário. |
-| `/products` | **✔** | Grid operacional de produtos + Busca avançada + Paginação. |
-| `/products/:id` | **✔** | Detalhamento técnico do item e mutação de dados inline. |
-| `/categories` | **✔** | Painel estrutural de classificação de catálogo. |
+O esquema é versionado com **Flyway**. Um banco criado pela versão anterior (Extensão III, com `ddl-auto=update`) é reconhecido automaticamente: a V1 é marcada como aplicada e só as novas migrações rodam. Na migração, o primeiro usuário de cada loja passa a ser ADMIN.
 
 ---
 
-## 🚀 Inicialização do Ecossistema
+## 🔐 Autenticação e papéis
 
-### Via Docker Compose (Abordagem Pronta para Produção)
-Para subir todo o ecossistema (Frontend, Backend e Banco de Dados) configurados para se comunicarem nativamente via redes Docker:
+1. `POST /api/v1/auth/login` devolve um `accessToken` (15 min) e um `refreshToken` (7 dias).
+2. O Axios envia `Authorization: Bearer <token>` em toda requisição.
+3. Sem token ou com token expirado a API responde **401**, e o interceptor do front renova o token e repete a chamada.
+4. **Registro** (`/register`) sempre cria uma **loja nova** e torna o usuário **ADMIN** dela. Funcionários entram na loja somente quando o ADMIN os cadastra em **Usuários**.
 
+| Ação | USER | ADMIN |
+| --- | :---: | :---: |
+| Produtos, categorias, estoque, pedidos, relatórios | ✔ | ✔ |
+| Cancelar pedido **finalizado** (devolve o estoque) | ✗ | ✔ |
+| Cadastrar, editar, desativar usuários | ✗ | ✔ |
+
+Uma conta desativada perde o acesso imediatamente, mesmo com token válido.
+
+---
+
+## 🖥️ Telas
+
+| Rota | O que faz |
+| :--- | :--- |
+| `/login`, `/register` | Entrada e criação de conta + loja |
+| `/dashboard` | Faturamento do dia e do mês, ticket médio, gráfico de 14 dias, mais vendidos, estoque baixo, exportação CSV |
+| `/orders` | Lista de pedidos com filtro por status e criação de pedido |
+| `/orders/:id` | Itens do pedido, editar (se aberto), finalizar com forma de pagamento, cancelar |
+| `/products` | Busca por nome/SKU, filtro por categoria, estoque de cada produto |
+| `/products/:id` | Detalhes, edição, movimentar estoque e histórico de movimentações |
+| `/stock` | Produtos por menor estoque e alertas de reposição |
+| `/categories` | Categorias (exclusão bloqueada se houver produtos) |
+| `/users` | Equipe da loja (somente ADMIN) |
+
+---
+
+## 🔄 Regras de negócio principais
+
+- **Pedido aberto** não mexe no estoque. Ao **finalizar**, o sistema baixa o estoque de todos os itens em uma única transação, travando os produtos (`SELECT ... FOR UPDATE`). Se faltar estoque de qualquer item, nada é baixado.
+- **Cancelar** um pedido finalizado gera entradas "Cancelamento do pedido #N" e devolve o estoque.
+- O estoque só muda por **movimentações** (entrada, saída, ajuste por contagem), então todo saldo tem histórico com usuário e motivo.
+- Produto que já foi vendido não pode ser excluído: deve ser **desativado**.
+- Categoria com produtos não pode ser excluída (resposta 409 com explicação).
+
+---
+
+## 🚀 Como rodar
+
+### Docker Compose
 ```bash
 docker compose up --build -d
 ```
+- Frontend: http://localhost:3000
+- API: http://localhost:8080
+- Documentação interativa da API (Swagger): http://localhost:8080/swagger-ui.html
 
-- Acesso à UI (Frontend): http://localhost:3000
-- Gateway da API (Backend): http://localhost:8080
-
-Inicialização Isolada (Modo de Desenvolvimento)
+### Modo desenvolvimento
 ```bash
-docker run -d --name pm-db \
-  -e POSTGRES_DB=productmanager \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -p 5432:5432 \
-  postgres:16-alpine
-  ```
-
-## 🛰️ Manual da API (Playbook de Comandos cURL)
-Utilize os roteiros de comandos abaixo para inspecionar, testar e homologar os comportamentos das rotas diretamente via terminal de linha de comando.
-
-💡 Dica: Substitua o valor da variável TOKEN pelo hash retornado no endpoint de login.
-
-🔑 Autenticação e Registro
-Registrar Novo Usuário / Administrador
-```bash 
-curl -X POST http://localhost:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Alex Admin",
-    "email": "alex@empresa.com",
-    "password": "SenhaSegura123",
-    "role": "ADMIN"
-  }'
+# Banco
+docker run -d --name pm-db -e POSTGRES_DB=productmanager -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16-alpine
+# API
+cd backend && mvn spring-boot:run
+# Front (http://localhost:3000, com proxy para a API)
+cd frontend && npm install && npm run dev
 ```
 
-Efetuar Login (Obter Tokens de Sessão)
+### Testes
 ```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "alex@empresa.com",
-    "password": "SenhaSegura123"
-  }'
+cd backend && mvn test
 ```
+Os testes usam um banco H2 em memória (não precisam de PostgreSQL) e cobrem isolamento entre lojas, permissões, regras de estoque e o fluxo completo de pedidos.
 
-🏪 Gestão de Lojas (Multi-Tenant Stores)
-Cadastrar Unidade Comercial
+---
+
+## 🛰️ API (resumo)
+
+Todas as rotas, exceto `/api/v1/auth/**`, exigem `Authorization: Bearer <accessToken>`. A lista completa, com exemplos, está no Swagger.
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| POST | `/api/v1/auth/register` | Cria loja + usuário ADMIN |
+| POST | `/api/v1/auth/login` · `/refresh` | Tokens de acesso |
+| GET | `/api/v1/users/me` | Usuário logado |
+| GET/POST/PUT | `/api/v1/users` | Equipe da loja (ADMIN) |
+| GET/POST/PUT/DELETE | `/api/v1/categories` | Categorias |
+| GET | `/api/v1/products?search=&categoryId=&page=&size=&sortBy=&direction=` | Busca paginada (`sortBy`: name, price, createdAt, stockQty) |
+| GET/POST/PUT/DELETE | `/api/v1/products/{id}` | Produto |
+| GET/POST | `/api/v1/products/{id}/stock-movements` | Histórico / nova movimentação (`ENTRADA`, `SAIDA`, `AJUSTE`) |
+| GET | `/api/v1/stock/low` | Produtos com estoque ≤ mínimo |
+| GET/POST | `/api/v1/orders` | Lista (filtro `status`) / cria pedido |
+| GET/PUT | `/api/v1/orders/{id}` | Detalhe / troca os itens (só ABERTO) |
+| POST | `/api/v1/orders/{id}/finalize` · `/cancel` | Finaliza (baixa estoque) / cancela |
+| GET | `/api/v1/reports/summary` · `/sales-by-day` · `/top-products` | Indicadores |
+| GET | `/api/v1/reports/sales.csv?from=AAAA-MM-DD&to=AAAA-MM-DD` | Exporta vendas |
+
+Exemplo: registrar, abrir e finalizar um pedido
 ```bash
-curl -X POST http://localhost:8080/api/stores \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "name": "Distribuidora Central Tech"
-  }'
-  ```
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/register -H "Content-Type: application/json" \
+  -d '{"name":"Ana","email":"ana@burger.com","password":"123456","storeName":"Burger House"}' | jq -r .accessToken)
 
-Listar Unidades Disponíveis
-```bash
-curl -X GET http://localhost:8080/api/stores \
-  -H "Authorization: Bearer $TOKEN"
-```
+curl -X POST http://localhost:8080/api/v1/products -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"X-Burger","price":25.90,"sku":"LAN-001","minStock":5,"initialStock":30}'
 
-📂 Controle de Categorias
-Criar Categoria Estrutural
-```bash
-curl -X POST http://localhost:8080/api/categories \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "name": "Hardware Premium",
-    "description": "Componentes eletrônicos de alta performance",
-    "store_id": 1
-  }'
-```
+curl -X POST http://localhost:8080/api/v1/orders -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"customerName":"Mesa 4","items":[{"productId":1,"quantity":2}]}'
 
-Consultar Categorias Vinculadas à Loja
-
-```bash
-
-curl -X GET "http://localhost:8080/api/categories?storeId=1" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-📦 Catálogo de Produtos
-Incluir Produto com Vinculações Relacionais
-
-```bash
-
-curl -X POST http://localhost:8080/api/products \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "name": "Monitor UltraWide 34",
-    "description": "Painel IPS, 144Hz, Resolução QHD",
-    "price": 2499.90,
-    "category_id": 1,
-    "store_id": 1
-  }'
-  ```
-
-Recuperar Catálogo Paginado
-```bash
-curl -X GET "http://localhost:8080/api/products?page=0&size=10&sort=name,asc" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-Modificar Atributos de Produto (Update Inline)
-```bash
-curl -X PUT http://localhost:8080/api/products/1 \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "name": "Monitor UltraWide 34 PRO",
-    "price": 2649.00
-  }''
-  ```
-
-Excluir Registro de Produto
-```bash
-curl -X DELETE http://localhost:8080/api/products/1 \
-  -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost:8080/api/v1/orders/1/finalize -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"paymentMethod":"PIX"}'
 ```

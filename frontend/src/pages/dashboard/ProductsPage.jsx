@@ -24,6 +24,7 @@ export default function ProductsPage() {
   const [data, setData]               = useState(null)
   const [page, setPage]               = useState(0)
   const [search, setSearch]           = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [listLoading, setListLoading] = useState(true)
   const [categories, setCategories]   = useState([])
 
@@ -40,7 +41,7 @@ export default function ProductsPage() {
   useEffect(() => {
     const t = setTimeout(() => { setPage(0); loadProducts(0, search) }, 400)
     return () => clearTimeout(t)
-  }, [search])
+  }, [search, categoryFilter])
 
   useEffect(() => { loadProducts(page, search) }, [page])
 
@@ -51,7 +52,10 @@ export default function ProductsPage() {
   async function loadProducts(p = page, s = search) {
     setListLoading(true)
     try {
-      const res = await productsApi.list({ page: p, size: 10, sortBy: 'createdAt', direction: 'desc', search: s || undefined })
+      const res = await productsApi.list({
+        page: p, size: 10, sortBy: 'createdAt', direction: 'desc',
+        search: s || undefined, categoryId: categoryFilter || undefined,
+      })
       setData(res.data)
     } catch {
       toast.error('Erro ao carregar produtos')
@@ -62,7 +66,7 @@ export default function ProductsPage() {
 
   function openCreate() {
     setEditTarget(null)
-    reset({ name: '', description: '', price: '', categoryId: '' })
+    reset({ name: '', description: '', price: '', categoryId: '', sku: '', minStock: 0, initialStock: 0, active: true })
     setModalOpen(true)
   }
 
@@ -73,6 +77,9 @@ export default function ProductsPage() {
       description: product.description || '',
       price: product.price,
       categoryId: product.category?.id || '',
+      sku: product.sku || '',
+      minStock: product.minStock ?? 0,
+      active: product.active,
     })
     setModalOpen(true)
   }
@@ -90,6 +97,10 @@ export default function ProductsPage() {
       description: formData.description || null,
       price: parseFloat(formData.price),
       categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
+      sku: formData.sku || null,
+      minStock: formData.minStock === '' ? 0 : parseInt(formData.minStock),
+      initialStock: editTarget ? undefined : (formData.initialStock === '' ? 0 : parseInt(formData.initialStock)),
+      active: editTarget ? Boolean(formData.active) : true,
     }
     try {
       if (editTarget) {
@@ -120,7 +131,15 @@ export default function ProductsPage() {
   }
 
   const columns = [
-    { key: 'name', label: 'Nome' },
+    {
+      key: 'name', label: 'Nome',
+      render: (v, row) => (
+        <span>
+          {v} {!row.active && <Badge color="muted">inativo</Badge>}
+          {row.sku && <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>{row.sku}</div>}
+        </span>
+      ),
+    },
     {
       key: 'price', label: 'Preço',
       render: (v) => <span style={{ fontFamily: 'var(--mono)', color: 'var(--green)' }}>R$ {Number(v).toFixed(2)}</span>,
@@ -128,6 +147,10 @@ export default function ProductsPage() {
     {
       key: 'category', label: 'Categoria',
       render: (v) => v ? <Badge>{v.name}</Badge> : <Badge color="muted">—</Badge>,
+    },
+    {
+      key: 'stockQty', label: 'Estoque',
+      render: (v, row) => <Badge color={row.lowStock ? (v === 0 ? 'red' : 'yellow') : 'green'}>{v} un.</Badge>,
     },
     {
       key: 'createdAt', label: 'Criado em',
@@ -152,12 +175,22 @@ export default function ProductsPage() {
         action={<Button onClick={openCreate}>+ Novo produto</Button>}
       />
 
-      <input
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder="🔍  Buscar por nome..."
-        style={{ ...inputStyle, marginBottom: 16 }}
-      />
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="🔍  Buscar por nome ou SKU..."
+          style={{ ...inputStyle, flex: 1 }}
+        />
+        <select
+          value={categoryFilter}
+          onChange={e => setCategoryFilter(e.target.value)}
+          style={{ ...inputStyle, width: 220, appearance: 'none', cursor: 'pointer' }}
+        >
+          <option value="">Todas as categorias</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
 
       <Table
         columns={columns}
@@ -223,6 +256,35 @@ export default function ProductsPage() {
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ ...fieldStyle, flex: 1 }}>
+              <label style={labelStyle}>SKU</label>
+              <input style={inputStyle} placeholder="Ex.: LAN-001" {...register('sku', { maxLength: { value: 60, message: 'Máximo 60 caracteres' } })} />
+              {errors.sku && <span style={errorStyle}>{errors.sku.message}</span>}
+            </div>
+            <div style={{ ...fieldStyle, flex: 1 }}>
+              <label style={labelStyle}>ESTOQUE MÍNIMO</label>
+              <input style={inputStyle} type="number" min="0" step="1" {...register('minStock', { min: { value: 0, message: 'Não pode ser negativo' } })} />
+              {errors.minStock && <span style={errorStyle}>{errors.minStock.message}</span>}
+            </div>
+            {!editTarget && (
+              <div style={{ ...fieldStyle, flex: 1 }}>
+                <label style={labelStyle}>ESTOQUE INICIAL</label>
+                <input style={inputStyle} type="number" min="0" step="1" {...register('initialStock', { min: { value: 0, message: 'Não pode ser negativo' } })} />
+                {errors.initialStock && <span style={errorStyle}>{errors.initialStock.message}</span>}
+              </div>
+            )}
+          </div>
+
+          {editTarget && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
+              <input type="checkbox" {...register('active')} /> Produto ativo (inativos não podem ser vendidos)
+            </label>
+          )}
+          {editTarget && (
+            <p style={{ fontSize: 11, color: 'var(--muted)' }}>O estoque atual é alterado pela tela do produto (entrada, saída ou ajuste).</p>
+          )}
 
           <ModalActions>
             <Button variant="ghost" type="button" onClick={() => setModalOpen(false)}>Cancelar</Button>

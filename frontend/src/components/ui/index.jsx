@@ -107,6 +107,7 @@ export function Badge({ children, color = 'accent' }) {
     accent:  { bg: 'rgba(108,99,255,0.15)', text: 'var(--accent2)' },
     green:   { bg: 'rgba(34,197,94,0.15)',  text: 'var(--green)'   },
     red:     { bg: 'rgba(239,68,68,0.15)',  text: 'var(--red)'     },
+    yellow:  { bg: 'rgba(234,179,8,0.15)',  text: 'var(--yellow)'  },
     muted:   { bg: 'var(--bg3)',            text: 'var(--muted)'   },
   }
   const c = colors[color] || colors.muted
@@ -222,7 +223,7 @@ export function ConfirmDialog({ open, message, onConfirm, onCancel }) {
 }
 
 // ─── StatCard ─────────────────────────────────────────────
-export function StatCard({ label, value, icon, color = 'var(--accent2)' }) {
+export function StatCard({ label, value, icon, color = 'var(--accent2)', hint }) {
   return (
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -230,6 +231,7 @@ export function StatCard({ label, value, icon, color = 'var(--accent2)' }) {
         <span style={{ fontSize: 20, color }}>{icon}</span>
       </div>
       <div style={{ fontSize: 26, fontWeight: 600 }}>{value}</div>
+      {hint && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
     </Card>
   )
 }

@@ -7,10 +7,19 @@ import ProductsPage from '../pages/dashboard/ProductsPage'
 import ProductDetailPage from '../pages/dashboard/ProductDetailPage'
 import CategoriesPage from '../pages/dashboard/CategoriesPage'
 import DashboardPage from '../pages/dashboard/DashboardPage'
+import StockPage from '../pages/dashboard/StockPage'
+import OrdersPage from '../pages/dashboard/OrdersPage'
+import OrderDetailPage from '../pages/dashboard/OrderDetailPage'
+import UsersPage from '../pages/dashboard/UsersPage'
 
 function PrivateRoute({ children }) {
   const { isAuthenticated } = useAuth()
   return isAuthenticated ? children : <Navigate to="/login" replace />
+}
+
+function AdminRoute({ children }) {
+  const { isAdmin } = useAuth()
+  return isAdmin ? children : <Navigate to="/dashboard" replace />
 }
 
 function PublicRoute({ children }) {
@@ -32,6 +41,10 @@ export default function AppRoutes() {
         <Route path="products"             element={<ProductsPage />} />
         <Route path="products/:id"         element={<ProductDetailPage />} />
         <Route path="categories"           element={<CategoriesPage />} />
+        <Route path="stock"                element={<StockPage />} />
+        <Route path="orders"               element={<OrdersPage />} />
+        <Route path="orders/:id"           element={<OrderDetailPage />} />
+        <Route path="users"                element={<AdminRoute><UsersPage /></AdminRoute>} />
       </Route>
 
       {/* Fallback */}
